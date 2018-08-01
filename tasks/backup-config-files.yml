@@ -1,0 +1,15 @@
+---
+- name: backup engine config files
+  copy: remote_src=True src={{ item }} dest={{ item }}.{{ backup_timestamp }}
+  with_items: "{{ ovirt_engine_etc_conf_files }}"
+  when: ovirt_engine_to_remote_db
+
+- name: backup aaa config files
+  copy: remote_src=True src={{ item }} dest={{ item }}.{{ backup_timestamp }}
+  with_items: "{{ ovirt_engine_etc_conf_files_aaa }}"
+  when: ovirt_engine_to_remote_db
+
+- name: backup dwh config files
+  copy: remote_src=True src={{ item }} dest={{ item }}.{{ backup_timestamp }}
+  with_items: "{{ ovirt_engine_etc_conf_files }}"
+  when: ovirt_engine_dwh_to_remote_db

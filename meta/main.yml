@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: "Lucie Leistnerova"
+  description: "Role for oVirt change engine/dwh local to remote database"
+  company: "Red Hat, Inc."
+  license: "GPLv3"
+  min_ansible_version: 2.4
+  platforms:
+  - name: EL
+    versions:
+    - all
+  galaxy_tags:
+    - migration
+
+dependencies: []

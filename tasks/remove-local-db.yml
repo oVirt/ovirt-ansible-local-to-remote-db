@@ -1,0 +1,131 @@
+---
+# to be sure services are stopped
+- name: stop necessary service
+  service:
+    name: "{{ item }}"
+    state: stopped
+  with_items:
+    - ovirt-engine-dwhd
+    - ovirt-engine
+    - ovirt-fence-kdump-listener
+
+- name: Include postgres params
+  include_vars: default.yml
+
+- name: Override postgres params for CentOs or Red Hat when ovirt >= 4.2
+  include_vars: postgres95.yml
+  when:
+    - ovirt_engine_version >= "4.2"
+
+# no connections left in db
+- name: restart postgres
+  service:
+    name: "{{ postgres_service_name }}"
+    state: restarted
+
+- name: remove engine/dwh databases - get postgres path
+  become: yes
+  become_user: postgres
+  shell: echo $HOME
+  register: pgpath
+  tags:
+    - skip_ansible_lint
+
+# first backup databases
+- name: creating directory backup in postgres home
+  become: yes
+  become_user: postgres
+  file:
+    path: "{{ pgpath.stdout }}/engine-backup"
+    state: directory
+
+- name: dump engine and dwh db
+  include_role:
+    name: ansible-role-ovirt-dump-db
+    tasks_from: postgres-dump
+  vars:
+    engine_remote_dump_file: "{{ pgpath.stdout }}/engine-backup/engine.tar"
+    dwh_remote_dump_file: "{{ pgpath.stdout }}/engine-backup/dwh.tar"
+    ovirt_engine_db_dump: "{{ ovirt_engine_to_remote_db }}"
+    ovirt_engine_db_dump_dwh: "{{ ovirt_engine_dwh_to_remote_db }}"
+  when:
+    - ovirt_engine_version < '4.2'
+
+- name: dump engine and dwh db - postgres 9.5
+  include_role:
+    name: ansible-role-ovirt-dump-db
+    tasks_from: postgres95-dump
+  vars:
+    engine_remote_dump_file: "{{ pgpath.stdout }}/engine-backup/engine.tar"
+    dwh_remote_dump_file: "{{ pgpath.stdout }}/engine-backup/dwh.tar"
+    ovirt_engine_db_dump: "{{ ovirt_engine_to_remote_db }}"
+    ovirt_engine_db_dump_dwh: "{{ ovirt_engine_dwh_to_remote_db }}"
+  when:
+    - ovirt_engine_version >= '4.2'
+
+- name: get dump of engine database
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: "{{ ovirt_engine_db_dump_engine_db['ENGINE_DB_DATABASE'] }}"
+    target: "{{ pgpath.stdout }}/engine-backup/engine.tar"
+    target_opts: "-F t"
+    state: dump
+  when: ovirt_engine_to_remote_db
+
+- name: get dump of dwh database
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: "{{ ovirt_engine_db_dump_dwh_db['DWH_DB_DATABASE'] }}"
+    target: "{{ pgpath.stdout }}/engine-backup/dwh.tar"
+    target_opts: "-F t"
+    state: dump
+  when: ovirt_engine_dwh_to_remote_db
+
+# drop databases and users
+- name: drop engine local db
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: "{{ ovirt_engine_db_dump_engine_db['ENGINE_DB_DATABASE'] }}"
+    state: absent
+  when:
+    - ovirt_engine_to_remote_db
+
+- name: drop dwh local db
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: "{{ ovirt_engine_db_dump_dwh_db['DWH_DB_DATABASE'] }}"
+    state: absent
+  when:
+    - ovirt_engine_dwh_to_remote_db
+
+- name: drop engine local db user
+  become: yes
+  become_user: postgres
+  postgresql_user:
+    name: "{{ ovirt_engine_db_dump_engine_db['ENGINE_DB_USER'] }}"
+    state: absent
+  when:
+    - ovirt_engine_to_remote_db
+
+- name: drop dwh local db user
+  become: yes
+  become_user: postgres
+  postgresql_user:
+    name: "{{ ovirt_engine_db_dump_dwh_db['DWH_DB_USER'] }}"
+    state: absent
+  when:
+    - ovirt_engine_dwh_to_remote_db
+
+# restart needed services
+- name: start engine and dwh service
+  service:
+    name: "{{ item }}"
+    state: restarted
+  with_items:
+    - ovirt-engine
+    - ovirt-engine-dwhd
+    - ovirt-fence-kdump-listener
