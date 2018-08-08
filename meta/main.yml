@@ -1,6 +1,7 @@
 ---
 galaxy_info:
   author: "Lucie Leistnerova"
+  role_name: "local-to-remote-db"
   description: "Role for oVirt change engine/dwh local to remote database"
   company: "Red Hat, Inc."
   license: "GPLv3"
